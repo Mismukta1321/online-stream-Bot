@@ -1,6 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from flask import Flask, Response, render_template_string, send_file
+from flask import Flask, Response, render_template_string, request, send_file
 from pymongo import MongoClient
 from datetime import datetime
 import threading
@@ -113,15 +113,7 @@ def watch_page(link_id):
           </video>
         </div>
 
-        <!-- Player 2: VLC Plugin fallback (if browser supports) -->
-        <!-- (Optional, many modern browsers don't support this plugin) -->
-        <!--
-        <div class="player">
-          <embed type="application/x-vlc-plugin" pluginspage="http://www.videolan.org" width="100%" height="400" id="vlc" />
-        </div>
-        -->
-
-        <!-- Player 3: Iframe with direct video URL (for external players or apps) -->
+        <!-- Player 3: Iframe with direct video URL -->
         <div class="player">
           <iframe src="{{ stream_url }}" allowfullscreen></iframe>
         </div>
@@ -153,7 +145,7 @@ def watch_page(link_id):
     )
 
 # ==============================
-# 🔊 STREAM VIDEO FILE
+# 🔊 STREAM VIDEO FILE with HTTP Range support
 # ==============================
 @flask_app.route("/stream/<link_id>")
 def stream_file(link_id):
@@ -167,12 +159,39 @@ def stream_file(link_id):
     if not os.path.exists(temp_path):
         flask_bot.download_media(file_id, file_name=temp_path)
 
-    return send_file(
-        temp_path,
-        mimetype='video/mp4',
-        conditional=True,
-        as_attachment=False
-    )
+    file_size = os.path.getsize(temp_path)
+    range_header = request.headers.get('Range', None)
+    if not range_header:
+        # No Range header: send entire file
+        return send_file(temp_path, mimetype='video/mp4', conditional=True)
+
+    # Parse Range header (bytes=START-END)
+    byte1, byte2 = 0, None
+    range_val = range_header.strip().lower().replace('bytes=', '')
+    if '-' in range_val:
+        parts = range_val.split('-')
+        if parts[0]:
+            byte1 = int(parts[0])
+        if parts[1]:
+            byte2 = int(parts[1])
+
+    length = file_size - byte1
+    if byte2 is not None:
+        length = byte2 - byte1 + 1
+
+    with open(temp_path, 'rb') as f:
+        f.seek(byte1)
+        data = f.read(length)
+
+    resp = Response(data,
+                    206,
+                    mimetype='video/mp4',
+                    content_type='video/mp4',
+                    direct_passthrough=True)
+    resp.headers.add('Content-Range', f'bytes {byte1}-{byte1 + length - 1}/{file_size}')
+    resp.headers.add('Accept-Ranges', 'bytes')
+    resp.headers.add('Content-Length', str(length))
+    return resp
 
 # ==============================
 # 🚀 START APP

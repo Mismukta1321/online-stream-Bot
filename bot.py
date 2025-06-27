@@ -4,8 +4,8 @@ from flask import Flask, Response, render_template_string
 from pymongo import MongoClient
 from datetime import datetime, timedelta, timezone
 import threading
-import os, random, string
-import asyncio
+import os, random, string, asyncio
+import io
 
 # -------------------- Configuration --------------------
 API_ID = 22697010
@@ -35,20 +35,20 @@ async def upload_file(c, m: Message):
         return await m.reply("❌ Reply to a video or document file.")
 
     link_id = gen_id()
-    expiry = datetime.utcnow().replace(tzinfo=timezone.utc) + timedelta(days=3650)  # 10 years
+    expiry = datetime.now(timezone.utc) + timedelta(days=3650)
 
     links.insert_one({
         "link_id": link_id,
         "file_id": media.file_id,
         "expiry": expiry,
-        "created": datetime.utcnow().replace(tzinfo=timezone.utc)
+        "created": datetime.now(timezone.utc)
     })
 
     stream_link = f"{BASE_URL}/watch/{link_id}"
     await m.reply(
-        f"✅ **Watch Link:** {stream_link}\n"
+        f"✅ **Watch:** {stream_link}\n"
         f"📥 **Download:** {BASE_URL}/stream/{link_id}\n"
-        f"🕒 Validity: Lifetime"
+        f"♾️ Valid for lifetime"
     )
 
 # -------------------- Watch Page --------------------
@@ -67,30 +67,27 @@ def watch_page(link_id):
         <title>🎬 Movie Stream</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            body {{ background-color: #000; color: #fff; text-align: center; font-family: sans-serif; }}
-            video {{ width: 90%; max-width: 800px; margin-top: 20px; border: 2px solid #444; border-radius: 10px; }}
-            .buttons a {{ display: inline-block; margin: 10px; padding: 10px 20px; background: #f90; color: black; text-decoration: none; border-radius: 5px; }}
-            iframe {{ margin-top: 20px; border: none; }}
+            body {{ background: #000; color: white; text-align: center; font-family: sans-serif; }}
+            video {{ width: 90%; max-width: 800px; margin-top: 20px; border-radius: 10px; }}
+            .btns a {{ display: inline-block; margin: 8px; background: #f90; padding: 10px 20px; border-radius: 5px; color: black; text-decoration: none; }}
         </style>
     </head>
     <body>
         <h1>🎬 Now Streaming</h1>
         <video controls>
             <source src="/stream/{link_id}" type="video/mp4">
-            Your browser does not support video playback.
         </video>
-        <div class="buttons">
+        <div class="btns">
             <a href="/stream/{link_id}" download>⬇️ Download</a>
-            <a href="intent://stream/{link_id}#Intent;package=org.videolan.vlc;scheme=http;end">VLC Player</a>
-            <a href="intent://stream/{link_id}#Intent;package=com.mxtech.videoplayer.ad;scheme=http;end">MX Player</a>
+            <a href="intent://stream/{link_id}#Intent;package=com.mxtech.videoplayer.ad;scheme=https;end">MX Player</a>
+            <a href="intent://stream/{link_id}#Intent;package=org.videolan.vlc;scheme=https;end">VLC</a>
         </div>
-        <iframe src="https://youadserver.com/ad.html" width="100%" height="90"></iframe>
     </body>
     </html>
     '''
     return render_template_string(html)
 
-# -------------------- Stream Route --------------------
+# -------------------- Stream (Fixed: with BytesIO) --------------------
 @flask_app.route("/stream/<link_id>")
 def stream_file(link_id):
     data = links.find_one({"link_id": link_id})
@@ -98,30 +95,22 @@ def stream_file(link_id):
         return "❌ Link expired", 410
 
     file_id = data["file_id"]
-    temp_file = f"temp_{link_id}.mp4"
+    file_stream = io.BytesIO()
 
-    if not os.path.exists(temp_file):
-        # Download file using asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(flask_bot.download_media(file_id, file_name=temp_file))
-        except Exception as e:
-            return f"❌ Error while downloading: {str(e)}", 500
-        finally:
-            loop.close()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
-    def generate():
-        with open(temp_file, "rb") as f:
-            while True:
-                chunk = f.read(8192)
-                if not chunk:
-                    break
-                yield chunk
+    try:
+        loop.run_until_complete(flask_bot.download_media(file_id, file_name=file_stream))
+        file_stream.seek(0)
+    except Exception as e:
+        return f"❌ Download error: {str(e)}", 500
+    finally:
+        loop.close()
 
-    return Response(generate(), mimetype="video/mp4")
+    return Response(file_stream, mimetype="video/mp4")
 
-# -------------------- Run Everything --------------------
+# -------------------- Start Everything --------------------
 def run_flask():
     flask_app.run(host="0.0.0.0", port=8080)
 

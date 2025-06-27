@@ -1,12 +1,14 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from flask import Flask, Response, render_template_string
+from flask import Flask, Response, render_template_string, send_file
 from pymongo import MongoClient
 from datetime import datetime
 import threading
 import random, string, os
 
-# 🔐 তোমার config
+# ==============================
+# 🔐 CONFIGURATION
+# ==============================
 API_ID = 22697010
 API_HASH = "fd88d7339b0371eb2a9501d523f3e2a7"
 BOT_TOKEN = "7347631253:AAFX3dmD0N8q6u0l2zghoBFu-7TXvMC571M"
@@ -14,7 +16,9 @@ MONGO_URI = "mongodb+srv://manogog673:manogog673@cluster0.ot1qt.mongodb.net/?ret
 DB_NAME = "streambot"
 BASE_URL = "https://unlikely-atlanta-nahidbrow-2c574cde.koyeb.app"
 
-# 🔧 initialize
+# ==============================
+# ⚙️ INITIALIZATION
+# ==============================
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 flask_bot = Client("flask", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 flask_app = Flask(__name__)
@@ -22,19 +26,22 @@ mongo = MongoClient(MONGO_URI)
 db = mongo[DB_NAME]
 links = db.links
 
-# 🔗 random ID generator
+# ==============================
+# 🔗 HELPER: generate random ID
+# ==============================
 def gen_id(length=10):
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
-# ✅ অটো রেসপন্স: ভিডিও/ডকুমেন্ট দিলেই stream link তৈরি
+# ==============================
+# 🤖 BOT: Auto-generate link when file is sent
+# ==============================
 @bot.on_message(filters.video | filters.document)
-async def auto_save(c, m: Message):
+async def auto_generate_link(c, m: Message):
     media = m.video or m.document
     if not media:
         return
 
     link_id = gen_id()
-
     links.insert_one({
         "link_id": link_id,
         "file_id": media.file_id,
@@ -51,7 +58,9 @@ async def auto_save(c, m: Message):
         disable_web_page_preview=True
     )
 
-# 🌐 ওয়াচ পেজ (ভিডিও প্লেয়ারসহ)
+# ==============================
+# 🌐 HTML Stream Page
+# ==============================
 @flask_app.route("/watch/<link_id>")
 def watch_page(link_id):
     data = links.find_one({"link_id": link_id})
@@ -66,10 +75,10 @@ def watch_page(link_id):
       <title>{{ title }}</title>
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <style>
-        body { background: #000; color: white; text-align: center; margin: 0; font-family: sans-serif; }
+        body { background: #000; color: white; font-family: sans-serif; text-align: center; margin: 0; }
         .container { padding: 20px; }
         video { width: 95%; max-width: 800px; border-radius: 12px; margin-top: 20px; }
-        .btn { display: inline-block; margin-top: 20px; background: #00f0ff; color: black; padding: 10px 20px; text-decoration: none; border-radius: 8px; }
+        .btn { background: #00f0ff; color: black; padding: 10px 20px; text-decoration: none; border-radius: 8px; display: inline-block; margin-top: 15px; }
       </style>
     </head>
     <body>
@@ -79,8 +88,7 @@ def watch_page(link_id):
           <source src="{{ stream_url }}" type="video/mp4">
           Your browser does not support the video tag.
         </video>
-        <br>
-        <a class="btn" href="{{ stream_url }}">⬇️ Direct Download</a>
+        <a class="btn" href="{{ stream_url }}">⬇️ Download</a>
       </div>
     </body>
     </html>
@@ -91,7 +99,9 @@ def watch_page(link_id):
         stream_url=f"/stream/{link_id}"
     )
 
-# 🔊 ভিডিও স্ট্রিম
+# ==============================
+# 🔊 STREAM VIDEO
+# ==============================
 @flask_app.route("/stream/<link_id>")
 def stream_file(link_id):
     data = links.find_one({"link_id": link_id})
@@ -99,18 +109,21 @@ def stream_file(link_id):
         return "❌ Invalid Link", 404
 
     file_id = data["file_id"]
-    temp_path = f"temp_{link_id}.mp4"
+    temp_path = f"/tmp/stream_{link_id}.mp4"  # safer path for server
 
-    # ✅ ফাইল নাম দিয়ে ডাউনলোড
-    flask_bot.download_media(file_id, file_name=temp_path)
+    if not os.path.exists(temp_path):
+        flask_bot.download_media(file_id, file_name=temp_path)
 
-    def generate():
-        with open(temp_path, "rb") as f:
-            yield from f
+    return send_file(
+        temp_path,
+        mimetype='video/mp4',
+        conditional=True,
+        as_attachment=False
+    )
 
-    return Response(generate(), mimetype="video/mp4")
-
-# 🚀 একসাথে bot + flask চালাও
+# ==============================
+# 🚀 START APP
+# ==============================
 def run_flask():
     flask_app.run(host="0.0.0.0", port=8080)
 

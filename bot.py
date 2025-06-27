@@ -14,7 +14,7 @@ API_HASH = "fd88d7339b0371eb2a9501d523f3e2a7"
 BOT_TOKEN = "7347631253:AAFX3dmD0N8q6u0l2zghoBFu-7TXvMC571M"
 MONGO_URI = "mongodb+srv://manogog673:manogog673@cluster0.ot1qt.mongodb.net/?retryWrites=true&w=majority&appName=Cluster"
 DB_NAME = "streambot"
-BASE_URL = "https://yourdomain.com"  # example: https://moviezone.stream
+BASE_URL = "unlikely-atlanta-nahidbrow-2c574cde.koyeb.app/"  # example: https://moviezone.stream
 
 # ==============================
 # ⚙️ INITIALIZATION

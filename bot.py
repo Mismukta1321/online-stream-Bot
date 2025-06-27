@@ -59,7 +59,7 @@ async def auto_generate_link(c, m: Message):
     )
 
 # ==============================
-# 🌐 HTML Stream Page
+# 🌐 HTML Stream Page with Multiple Players & Ads
 # ==============================
 @flask_app.route("/watch/<link_id>")
 def watch_page(link_id):
@@ -67,28 +67,81 @@ def watch_page(link_id):
     if not data:
         return "<h2 style='color:red'>❌ Invalid Link</h2>", 404
 
+    stream_url = f"/stream/{link_id}"
+
     html = '''
     <!DOCTYPE html>
     <html>
     <head>
-      <meta charset="UTF-8">
+      <meta charset="UTF-8" />
       <title>{{ title }}</title>
-      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
       <style>
-        body { background: #000; color: white; font-family: sans-serif; text-align: center; margin: 0; }
-        .container { padding: 20px; }
-        video { width: 95%; max-width: 800px; border-radius: 12px; margin-top: 20px; }
-        .btn { background: #00f0ff; color: black; padding: 10px 20px; text-decoration: none; border-radius: 8px; display: inline-block; margin-top: 15px; }
+        body { background: #000; color: #eee; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+        .container { max-width: 900px; margin: auto; padding: 20px; text-align: center; }
+        h1 { margin-bottom: 20px; }
+        .player { margin-bottom: 30px; border-radius: 12px; overflow: hidden; box-shadow: 0 0 15px #0ff; }
+        video, iframe { width: 100%; height: 400px; background: #000; border: none; }
+        .ads { background: #111; padding: 15px; margin: 30px 0; border-radius: 12px; }
+        .ads h3 { margin-top: 0; }
+        .ads img { max-width: 100%; border-radius: 8px; }
+        .btn-download {
+          display: inline-block;
+          padding: 12px 25px;
+          margin-top: 10px;
+          background: #00f0ff;
+          color: #000;
+          text-decoration: none;
+          border-radius: 8px;
+          font-weight: bold;
+          font-size: 1.1rem;
+        }
+        @media (max-width: 600px) {
+          video, iframe { height: 250px; }
+        }
       </style>
     </head>
     <body>
       <div class="container">
-        <h2>{{ title }}</h2>
-        <video controls autoplay>
-          <source src="{{ stream_url }}" type="video/mp4">
-          Your browser does not support the video tag.
-        </video>
-        <a class="btn" href="{{ stream_url }}">⬇️ Download</a>
+        <h1>{{ title }}</h1>
+
+        <!-- Player 1: HTML5 Video -->
+        <div class="player">
+          <video controls autoplay>
+            <source src="{{ stream_url }}" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        </div>
+
+        <!-- Player 2: VLC Plugin fallback (if browser supports) -->
+        <!-- (Optional, many modern browsers don't support this plugin) -->
+        <!--
+        <div class="player">
+          <embed type="application/x-vlc-plugin" pluginspage="http://www.videolan.org" width="100%" height="400" id="vlc" />
+        </div>
+        -->
+
+        <!-- Player 3: Iframe with direct video URL (for external players or apps) -->
+        <div class="player">
+          <iframe src="{{ stream_url }}" allowfullscreen></iframe>
+        </div>
+
+        <!-- Download Button -->
+        <a href="{{ stream_url }}" class="btn-download" download>⬇️ Download Video</a>
+
+        <!-- Advertisement Section -->
+        <div class="ads">
+          <h3>🎉 Support Us</h3>
+          <p>আপনি চাইলে এখানে গুগল এডসেন্স বা অন্য কোনো বিজ্ঞাপন কোড বসাতে পারেন।</p>
+
+          <!-- Example Ad Banner -->
+          <a href="https://your-sponsor-site.com" target="_blank" rel="noopener">
+            <img src="https://via.placeholder.com/728x90.png?text=Your+Ad+Here" alt="Sponsor Ad Banner" />
+          </a>
+
+          <!-- Example iframe ad (comment/uncomment as needed) -->
+          <!-- <iframe src="https://your-ad-network.com/adframe" width="728" height="90" style="border:none;"></iframe> -->
+        </div>
       </div>
     </body>
     </html>
@@ -96,11 +149,11 @@ def watch_page(link_id):
     return render_template_string(
         html,
         title="🎬 Movie Stream",
-        stream_url=f"/stream/{link_id}"
+        stream_url=stream_url
     )
 
 # ==============================
-# 🔊 STREAM VIDEO
+# 🔊 STREAM VIDEO FILE
 # ==============================
 @flask_app.route("/stream/<link_id>")
 def stream_file(link_id):
@@ -109,7 +162,7 @@ def stream_file(link_id):
         return "❌ Invalid Link", 404
 
     file_id = data["file_id"]
-    temp_path = f"/tmp/stream_{link_id}.mp4"  # safer path for server
+    temp_path = f"/tmp/stream_{link_id}.mp4"
 
     if not os.path.exists(temp_path):
         flask_bot.download_media(file_id, file_name=temp_path)

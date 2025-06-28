@@ -1,6 +1,6 @@
 pyrogram
 Flask
-flask-asyncio
-pymongo
 Flask-Cors
+Flask-AsyncIO
+pymongo
 uvicorn

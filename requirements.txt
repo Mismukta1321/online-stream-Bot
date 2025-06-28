@@ -1,4 +1,6 @@
 pyrogram
-tgcrypto
-flask
+Flask
+flask-asyncio
 pymongo
+Flask-Cors
+uvicorn

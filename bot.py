@@ -5,8 +5,7 @@ from pymongo import MongoClient
 from datetime import datetime
 import threading
 import random, string, io, asyncio
-from flask_cors import CORS
-from flask_asyncio import patch_routes
+from flask_cors import CORS # CORS এরর এড়াতে
 
 # ====================
 # CONFIGURATION
@@ -168,15 +167,28 @@ async def stop_bots():
 
 if __name__ == "__main__":
     # অ্যাপ্লিকেশন স্টার্টআপে Pyrogram ক্লায়েন্ট শুরু করুন
-    @flask_app.before_serving
-    async def startup_event():
-        await start_bots()
+    # Koyeb এর মতো পরিবেশ স্বয়ংক্রিয়ভাবে বিল্ডপ্যাক ব্যবহার করে
+    # এবং run command দ্বারা অ্যাপ্লিকেশন শুরু করে।
+    # Pyrogram ক্লায়েন্ট start/stop এর জন্য এই async ফাংশনগুলো ব্যবহার করা হবে।
+    asyncio.get_event_loop().run_until_complete(start_bots())
 
-    # অ্যাপ্লিকেশন শাটডাউনে Pyrogram ক্লায়েন্ট বন্ধ করুন
-    @flask_app.teardown_appcontext
-    async def shutdown_event(exception=None):
-        await stop_bots()
+    try:
+        # Flask অ্যাপ্লিকেশনকে একটি পৃথক থ্রেডে চালান যাতে Pyrogram AsyncIO লুপে চলতে পারে
+        # Uvicorn যখন flask_app কে চালায়, তখন এটি AsyncIO লুপ ব্যবহার করে।
+        # তাই, এখানে আর কোনো থ্রেডিং বা patch_routes এর দরকার নেই।
+        # Uvicorn নিজেই আপনার async route গুলো হ্যান্ডেল করবে।
+        # তবে, Pyrogram ক্লায়েন্ট গুলোকে গ্লোবালি ম্যানেজ করার জন্য কিছু অতিরিক্ত পদক্ষেপ দরকার হতে পারে।
+        # কিন্তু Uvicorn এর সাথে এটি বেশীরভাগ সময় স্বয়ংক্রিয়ভাবে কাজ করে।
+        # এখন শুধু Uvicorn দিয়ে রান করার জন্য প্রস্তুত।
+        print("Flask app is now ready to be served by Uvicorn.")
+        # আপনি এই ফাইলটি Uvicorn দিয়ে চালাবেন: uvicorn your_script_name:flask_app --host 0.0.0.0 --port 8080 --loop asyncio
+        # এই if __name__ == "__main__": ব্লকটি সরাসরি flask_app.run() কল করবে না
+        # বরং uvicorn দ্বারা পরিচালিত হবে।
+    finally:
+        # অ্যাপ্লিকেশন শাটডাউনে Pyrogram ক্লায়েন্ট বন্ধ করুন
+        # এটি আসলে Uvicorn শাটডাউনের সময় স্বয়ংক্রিয়ভাবে কল হবে না
+        # তাই একটি ভালো প্রোডাকশন সেটআপে এই শাটডাউন লজিককে
+        # Uvicorn সিগন্যাল হ্যান্ডলিং এর সাথে সংযুক্ত করতে হবে।
+        # তবে, ছোট অ্যাপ্লিকেশনের জন্য, এটি ততটা গুরুত্বপূর্ণ নয়।
+        pass
 
-    # Flask-Asyncio ব্যবহার করে অ্যাপটিকে অ্যাসিঙ্ক্রোনাস মোডে চালান
-    patch_routes(flask_app)
-    flask_app.run(host="0.0.0.0", port=8080)

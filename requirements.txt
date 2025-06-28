@@ -2,4 +2,5 @@ pyrogram
 flask
 pymongo
 flask-cors
+tgcrypto
 python-dotenv
